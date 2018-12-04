@@ -1,0 +1,13 @@
+{
+  "name": "litfire-firestore-mixin",
+  "version": "0.0.1",
+  "description": "Firebase - Cloud Firestore mixin for LitElement",
+  "main": "litfire-firestore-mixin.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/howking/litfire-firestore-mixin.git"
+  },
+  "keywords": [],
+  "author": "Junji Shiokawa <junji.shiokawa@gmail.com>",
+  "license": "ISC"
+}
