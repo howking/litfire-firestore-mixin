@@ -165,7 +165,11 @@ export const FirestoreMixin = parent =>
       
       this._firestoreProps = {};
       this._firestoreListeners = {};
-      this.db = this.constructor.db || firebase.firestore();
+      // this.db = this.constructor.db || firebase.firestore();
+      this._firestoreObserves = {};
+      const firestore = firebase.firestore()
+      firestore.settings({ timestampsInSnapshots: true })
+      this.db = this.constructor.db || firestore;
     }
     
     connectedCallback() {
@@ -204,12 +208,22 @@ export const FirestoreMixin = parent =>
       if (args.length > 0) {
         // Create a method observer that will be called every time
         // a templatized or observed property changes
-        const observer =
-              `_firestoreUpdateBinding('${name}', ${args.join(',')})`
-        this._createMethodObserver(observer);
+        // const observer =
+        //       `_firestoreUpdateBinding('${name}', ${args.join(',')})`
+        // this._createMethodObserver(observer);
+        this._firestoreObserves[args.join (',')]=name
       }
       
       this._firestoreUpdateBinding(name, ...args.map(x => this[x]));
+    }
+
+    // LitElement
+    updated(changedProperties){
+      changedProperties.forEach((oldValue, propName) => {
+        if(this._firestoreObserves[propName] && this[propName]){
+          this._firestoreUpdateBinding(this._firestoreObserves[propName],[this[propName]])
+        }
+      })
     }
     
     _firestoreUpdateBinding(name, ...args) {
@@ -226,6 +240,7 @@ export const FirestoreMixin = parent =>
       
       if (propArgsReady && observesArgsReady) {
         const collPath = stitch(config.literals, propArgs);
+        if(collPath.endsWith('/')) return;
         const assigner = this._firestoreAssigner(name, config);
         
         let ref = this.db[config.type](collPath);
@@ -246,11 +261,14 @@ export const FirestoreMixin = parent =>
       }
       
       
-      this.setProperties({
-        [name]: type === 'collection' ? [] : null,
-        [name + 'Ref']: null,
-        [name + 'Ready']: false,
-      })
+      // this.setProperties({
+      //   [name]: type === 'collection' ? [] : null,
+      //   [name + 'Ref']: null,
+      //   [name + 'Ready']: false,
+      // })
+      this[name+'Ref'] = null
+      this[name+'Ready'] = false
+
     }
     
     _firestoreAssigner(name, {type, live, noCache}) {
@@ -276,26 +294,34 @@ export const FirestoreMixin = parent =>
     
     _firestoreAssignDocument(name, snap) {
       this[name] = iDoc(snap);
+      this.requestUpdate(name)
     }
     
     _firestoreAssignCollection(name, snap) {
       const propertyValueIsArray = Array.isArray(this[name])
-      const allDocumentsChanged = snap.docs.length === snap.docChanges.length;
+      // const allDocumentsChanged = snap.docs.length === snap.docChanges.length;
+      const allDocumentsChanged = snap.docs.length === snap.docChanges().length;
       if (propertyValueIsArray && allDocumentsChanged === false) {
-        snap.docChanges.forEach((change) => {
+        // snap.docChanges.forEach((change) => {
+        snap.docChanges().forEach((change) => {
           switch (change.type) {
             case 'added':
-              this.splice(name, change.newIndex, 0, iDoc(change.doc));
+              // this.splice(name, change.newIndex, 0, iDoc(change.doc));
+              this[name].splice(change.newIndex, 0, iDoc(change.doc));
               break;
             case 'removed':
-              this.splice(name, change.oldIndex, 1);
+              // this.splice(name, change.oldIndex, 1);
+              this[name].splice(change.oldIndex, 1);
               break;
             case 'modified':
               if (change.oldIndex === change.newIndex) {
-                this.splice(name, change.oldIndex, 1, iDoc(change.doc));
+                // this.splice(name, change.oldIndex, 1, iDoc(change.doc));
+                this[name].splice(change.oldIndex, 1, iDoc(change.doc));
               } else {
-                this.splice(name, change.oldIndex, 1);
-                this.splice(name, change.newIndex, 0, iDoc(change.doc));
+                // this.splice(name, change.oldIndex, 1);
+                // this.splice(name, change.newIndex, 0, iDoc(change.doc));
+                this[name].splice(change.oldIndex, 1);
+                this[name].splice(change.newIndex, 0, iDoc(change.doc));
               }
               break;
             default:
@@ -305,5 +331,6 @@ export const FirestoreMixin = parent =>
       } else {
         this[name] = snap.docs.map(iDoc);
       }
+      this.requestUpdate(name)
     }
   }
